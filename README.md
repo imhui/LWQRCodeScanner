@@ -1,4 +1,4 @@
 LWQRCodeScanner
 ===============
 
-## Objective-C QR Code Scanner for iOS7
+### Objective-C QR Code Scanner for iOS7
