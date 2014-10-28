@@ -75,6 +75,7 @@
     
     AVCaptureVideoPreviewLayer *_videoPreviewLayer;
     AVCaptureSession *_captureSession;
+    AVCaptureDevice *_captureDevice;
     dispatch_queue_t _scannerQueue;
 }
 
@@ -107,7 +108,11 @@
     _previewerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, CGRectGetWidth(self.view.bounds), CGRectGetHeight(self.view.bounds))];
     _previewerView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _previewerView.backgroundColor = [UIColor clearColor];
+    _previewerView.userInteractionEnabled = YES;
     [self.view addSubview:_previewerView];
+    
+    UIPinchGestureRecognizer *pinchGesture = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(pinchAction:)];
+    [_previewerView addGestureRecognizer:pinchGesture];
     
     _scanBoxView = [[QRCodeScanBox alloc] initWithFrame:_previewerView.bounds];
     _scanBoxView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -135,6 +140,29 @@
     // Dispose of any resources that can be recreated.
 }
 
+- (void)pinchAction:(UIPinchGestureRecognizer *)pinchGesture {
+
+    if (_captureDevice.activeFormat.videoMaxZoomFactor == 1.0) {
+        return;
+    }
+    
+    static CGFloat lastPinchScale = 1.0;
+    if (pinchGesture.scale == lastPinchScale) {
+        return;
+    }
+    
+    CGFloat scale = pinchGesture.scale > lastPinchScale ? pinchGesture.scale : -pinchGesture.scale;
+    CGFloat zoomFactor = _captureDevice.videoZoomFactor + scale;
+    zoomFactor = zoomFactor <= 1.0 ? 1.0 : zoomFactor;
+    zoomFactor = zoomFactor > _captureDevice.activeFormat.videoMaxZoomFactor ? _captureDevice.activeFormat.videoMaxZoomFactor : zoomFactor;
+    [_captureDevice lockForConfiguration:nil];
+    [_captureDevice rampToVideoZoomFactor:zoomFactor withRate:pinchGesture.velocity];
+    [_captureDevice unlockForConfiguration];
+    
+    lastPinchScale = pinchGesture.scale;
+}
+
+
 #pragma mark
 
 - (void)playSound {
@@ -158,8 +186,8 @@
     NSLog(@"scanbox : %@", _scanBoxView);
     
     NSError *error;
-    AVCaptureDevice *captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:captureDevice error:&error];
+    _captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:_captureDevice error:&error];
     if (!input) {
         
         NSLog(@"%@", [error localizedDescription]);
@@ -204,6 +232,7 @@
 
     [_captureSession stopRunning];
     _captureSession = nil;
+    _captureDevice = nil;
     
     [_videoPreviewLayer removeFromSuperlayer];
     _videoPreviewLayer = nil;
